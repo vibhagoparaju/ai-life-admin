@@ -1,0 +1,249 @@
+export default function AIInsights({ expenses, savingsGoal }) {
+  // Calculate total spending
+  const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  // If no expenses, show empty state with assistant message
+  if (expenses.length === 0) {
+    return (
+      <div>
+        <h2 className="text-lg font-semibold text-gray-700 mb-4">Finance Assistant</h2>
+        <div className="p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded-md mb-4">
+          <p className="text-indigo-700 font-medium text-sm leading-relaxed">
+            Start tracking to get daily updates
+          </p>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-gray-600 text-sm font-medium mb-1">Add your first expense to begin</p>
+          <p className="text-gray-400 text-xs">I'll provide personalized insights and advice</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Group expenses by category
+  const categorySpending = expenses.reduce((acc, expense) => {
+    const category = expense.category;
+    acc[category] = (acc[category] || 0) + expense.amount;
+    return acc;
+  }, {});
+
+  // Calculate percentage for each category
+  const categoryPercentages = Object.entries(categorySpending).reduce((acc, [category, amount]) => {
+    const percentage = totalSpending > 0 ? (amount / totalSpending) * 100 : 0;
+    acc[category] = {
+      amount,
+      percentage: percentage.toFixed(1)
+    };
+    return acc;
+  }, {});
+
+  // Find top spending category
+  const topCategory = Object.entries(categorySpending).reduce((max, [category, amount]) =>
+    amount > max[1] ? [category, amount] : max,
+    ['', 0]
+  );
+
+  const topCategoryName = topCategory[0];
+  const topCategoryAmount = topCategory[1];
+  const topCategoryPercentage = categoryPercentages[topCategoryName]?.percentage || 0;
+
+  // Calculate potential savings (20% reduction)
+  const potentialSavings = (topCategoryAmount * 0.2).toFixed(2);
+
+  // Find top 2-3 categories for deeper analysis
+  const sortedCategories = Object.entries(categorySpending)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  const topCategoriesNames = sortedCategories.map(([name]) => name);
+  const topCategoriesCombinedAmount = sortedCategories.reduce((sum, [, amount]) => sum + amount, 0);
+  const topCategoriesCombinedPercentage = totalSpending > 0 
+    ? ((topCategoriesCombinedAmount / totalSpending) * 100).toFixed(1) 
+    : 0;
+
+  // Detect spending trend (recent vs earlier)
+  let trendMessage = "";
+  let trendColor = "blue";
+  if (expenses.length >= 2) {
+    const midpoint = Math.ceil(expenses.length / 2);
+    const recentExpenses = expenses.slice(midpoint);
+    const earlierExpenses = expenses.slice(0, midpoint);
+    
+    const recentAverage = recentExpenses.reduce((sum, exp) => sum + exp.amount, 0) / recentExpenses.length;
+    const earlierAverage = earlierExpenses.reduce((sum, exp) => sum + exp.amount, 0) / earlierExpenses.length;
+    
+    const percentageChange = ((recentAverage - earlierAverage) / earlierAverage) * 100;
+    
+    if (percentageChange > 10) {
+      trendMessage = "Your spending is increasing recently. Try to control expenses before it grows further.";
+      trendColor = "red";
+    } else if (percentageChange < -10) {
+      trendMessage = "Great work! You are improving your spending habits. Keep it up!";
+      trendColor = "green";
+    } else {
+      trendMessage = "Your spending pattern is stable. Consistency is key to financial health.";
+      trendColor = "blue";
+    }
+  }
+
+  // Build insights
+  const insights = [];
+
+  // Insight 1: Total spending with advice
+  if (totalSpending > 10000) {
+    insights.push(
+      <div key="spending-advice" className="p-4 bg-red-50 border-l-4 border-red-400 rounded-md">
+        <p className="text-red-700 font-semibold text-sm">High Spending Alert</p>
+        <p className="text-red-600 text-sm mt-1">You are spending a lot this month (₹{totalSpending.toFixed(2)}). Try reducing expenses to improve your savings.</p>
+      </div>
+    );
+  } else {
+    insights.push(
+      <div key="spending-advice" className="p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded-md">
+        <p className="text-indigo-700 font-semibold text-sm">Total Spending</p>
+        <p className="text-indigo-600 text-sm mt-1">You have spent ₹{totalSpending.toFixed(2)} across {Object.keys(categorySpending).length} categories</p>
+      </div>
+    );
+  }
+
+  // Insight 1.5: Spending evaluation
+  let evaluationMessage = "";
+  let evaluationColor = "blue";
+  
+  if (totalSpending < 5000) {
+    evaluationMessage = "Your spending is well controlled. Great job managing your finances!";
+    evaluationColor = "green";
+  } else if (totalSpending >= 5000 && totalSpending <= 15000) {
+    evaluationMessage = "Your spending is moderate. Keep tracking to maintain a healthy balance.";
+    evaluationColor = "blue";
+  } else {
+    evaluationMessage = "Your spending is high. Consider reducing expenses in top categories to improve savings.";
+    evaluationColor = "orange";
+  }
+
+  const bgColor = evaluationColor === "green" ? "bg-green-50" : evaluationColor === "orange" ? "bg-orange-50" : "bg-cyan-50";
+  const borderColor = evaluationColor === "green" ? "border-green-400" : evaluationColor === "orange" ? "border-orange-400" : "border-cyan-400";
+  const textColor = evaluationColor === "green" ? "text-green-700" : evaluationColor === "orange" ? "text-orange-700" : "text-cyan-700";
+  const textBodyColor = evaluationColor === "green" ? "text-green-600" : evaluationColor === "orange" ? "text-orange-600" : "text-cyan-600";
+
+  insights.push(
+    <div key="spending-evaluation" className={`p-4 ${bgColor} border-l-4 ${borderColor} rounded-md`}>
+      <p className={`${textColor} font-semibold text-sm`}>Spending Evaluation</p>
+      <p className={`${textBodyColor} text-sm mt-1`}>{evaluationMessage}</p>
+    </div>
+  );
+
+  // Insight 1.7: Savings goal tracking
+  if (savingsGoal > 0) {
+    const savingsAmount = savingsGoal - totalSpending;
+    const canSave = savingsAmount >= 0;
+    const goalBg = canSave ? "bg-green-50" : "bg-orange-50";
+    const goalBorder = canSave ? "border-green-400" : "border-orange-400";
+    const goalText = canSave ? "text-green-700" : "text-orange-700";
+    const goalBody = canSave ? "text-green-600" : "text-orange-600";
+
+    const goalMessage = canSave
+      ? `You can still save ₹${savingsAmount.toFixed(2)} to meet your goal`
+      : `You exceeded your goal by ₹${Math.abs(savingsAmount).toFixed(2)}`;
+
+    const topCategoryName = Object.entries(categorySpending).reduce((max, [category, amount]) =>
+      amount > max[1] ? [category, amount] : max,
+      ['', 0]
+    )[0];
+
+    insights.push(
+      <div key="savings-goal" className={`p-4 ${goalBg} border-l-4 ${goalBorder} rounded-md`}>
+        <p className={`${goalText} font-semibold text-sm`}>Savings Goal Progress</p>
+        <p className={`${goalBody} text-sm mt-1`}>Your goal: <span className="font-semibold">₹{savingsGoal.toFixed(2)}</span></p>
+        <p className={`${goalBody} text-sm mt-1`}>{goalMessage}</p>
+        {topCategoryName && !canSave && (
+          <p className={`${goalBody} text-sm mt-2`}>Reduce spending in {topCategoryName} to meet your goal</p>
+        )}
+      </div>
+    );
+  } else {
+    insights.push(
+      <div key="savings-goal" className="p-4 bg-gray-50 border-l-4 border-gray-400 rounded-md">
+        <p className="text-gray-700 font-semibold text-sm">Savings Goal</p>
+        <p className="text-gray-600 text-sm mt-1">Set a savings goal to track your progress and stay on target</p>
+      </div>
+    );
+  }
+
+  // Insight 1.6: Spending trend analysis
+  if (trendMessage) {
+    const trendBg = trendColor === "red" ? "bg-red-50" : trendColor === "green" ? "bg-green-50" : "bg-blue-50";
+    const trendBorder = trendColor === "red" ? "border-red-400" : trendColor === "green" ? "border-green-400" : "border-blue-400";
+    const trendText = trendColor === "red" ? "text-red-700" : trendColor === "green" ? "text-green-700" : "text-blue-700";
+    const trendBody = trendColor === "red" ? "text-red-600" : trendColor === "green" ? "text-green-600" : "text-blue-600";
+
+    insights.push(
+      <div key="spending-trend" className={`p-4 ${trendBg} border-l-4 ${trendBorder} rounded-md`}>
+        <p className={`${trendText} font-semibold text-sm`}>Spending Trend</p>
+        <p className={`${trendBody} text-sm mt-1`}>{trendMessage}</p>
+      </div>
+    );
+  }
+
+  // Insight 3: Top spending category
+  if (topCategoryName) {
+    insights.push(
+      <div key="top-category" className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded-md">
+        <p className="text-blue-700 font-semibold text-sm">Top Spending: {topCategoryName}</p>
+        <p className="text-blue-600 text-sm mt-1">You spent ₹{topCategoryAmount.toFixed(2)} ({topCategoryPercentage}% of your total budget)</p>
+      </div>
+    );
+  }
+
+  // Insight 4: Actionable savings advice
+  if (topCategoryName) {
+    insights.push(
+      <div key="savings-advice" className="p-4 bg-green-50 border-l-4 border-green-400 rounded-md">
+        <p className="text-green-700 font-semibold text-sm">Actionable Savings Strategy</p>
+        <p className="text-green-600 text-sm mt-1">If you reduce {topCategoryName} spending by 20%, you can save exactly <span className="font-semibold">₹{potentialSavings}</span></p>
+        <p className="text-green-600 text-sm mt-2">Reducing this category can improve your monthly savings significantly. Start small and track progress!</p>
+      </div>
+    );
+  }
+
+  // Insight 5: Category dominance analysis
+  if (topCategoriesNames.length > 0) {
+    const categoryList = topCategoriesNames.length === 1 
+      ? topCategoriesNames[0]
+      : topCategoriesNames.length === 2
+      ? `${topCategoriesNames[0]} and ${topCategoriesNames[1]}`
+      : `${topCategoriesNames.slice(0, -1).join(', ')} and ${topCategoriesNames[topCategoriesNames.length - 1]}`;
+
+    insights.push(
+      <div key="category-analysis" className="p-4 bg-orange-50 border-l-4 border-orange-400 rounded-md">
+        <p className="text-orange-700 font-semibold text-sm">Category Dominance</p>
+        <p className="text-orange-600 text-sm mt-1">Most of your money is going to {categoryList}</p>
+      </div>
+    );
+
+    // Insight 6: Spending pattern
+    insights.push(
+      <div key="spending-pattern" className="p-4 bg-cyan-50 border-l-4 border-cyan-400 rounded-md">
+        <p className="text-cyan-700 font-semibold text-sm">Spending Pattern</p>
+        <p className="text-cyan-600 text-sm mt-1">These categories make up {topCategoriesCombinedPercentage}% of your total spending</p>
+      </div>
+    );
+  }
+
+  // Insight 7: Motivation message
+  insights.push(
+    <div key="motivation" className="p-4 bg-purple-50 border-l-4 border-purple-400 rounded-md">
+      <p className="text-purple-700 font-semibold text-sm">Budget Tip</p>
+      <p className="text-purple-600 text-sm mt-1">Small changes can improve your savings. Every rupee counts!</p>
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-gray-700 mb-4\">Financial Insights</h2>
+      <div className="space-y-3">
+        {insights}
+      </div>
+    </div>
+  );
+}
