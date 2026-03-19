@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import './App.css'
 import ExpenseForm from './components/ExpenseForm'
 import ExpenseList from './components/ExpenseList'
@@ -14,6 +14,60 @@ function App() {
   const [savingsGoal, setSavingsGoal] = useState(0)
   const [salary, setSalary] = useState(0)
   const [notification, setNotification] = useState('')
+  const [goldPrice, setGoldPrice] = useState(null)
+  const [goldPriceStatus, setGoldPriceStatus] = useState('loading')
+  const [goldPriceUpdatedAt, setGoldPriceUpdatedAt] = useState(null)
+
+  const extractGoldPrice = (responseData) => {
+    if (typeof responseData === 'number') return responseData
+
+    if (Array.isArray(responseData)) {
+      for (const item of responseData) {
+        if (typeof item === 'number') return item
+        if (item && typeof item === 'object') {
+          if (typeof item.gold === 'number') return item.gold
+          if (typeof item.price === 'number') return item.price
+          const firstNumericValue = Object.values(item).find((value) => typeof value === 'number')
+          if (typeof firstNumericValue === 'number') return firstNumericValue
+        }
+      }
+    }
+
+    if (responseData && typeof responseData === 'object') {
+      if (typeof responseData.gold === 'number') return responseData.gold
+      if (typeof responseData.price === 'number') return responseData.price
+    }
+
+    return null
+  }
+
+  const fetchGoldPrice = useCallback(async () => {
+    setGoldPriceStatus('loading')
+    try {
+      const response = await fetch('https://api.metals.live/v1/spot/gold')
+      if (!response.ok) {
+        throw new Error('Failed to fetch gold price')
+      }
+
+      const data = await response.json()
+      const parsedGoldPrice = extractGoldPrice(data)
+
+      if (typeof parsedGoldPrice === 'number') {
+        setGoldPrice(parsedGoldPrice)
+        setGoldPriceStatus('success')
+        setGoldPriceUpdatedAt(new Date().toISOString())
+        return
+      }
+
+      throw new Error('Gold price unavailable')
+    } catch (error) {
+      setGoldPriceStatus('error')
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchGoldPrice()
+  }, [fetchGoldPrice])
 
   const sampleExpenses = [
     { category: 'Food', min: 150, max: 500 },
@@ -124,7 +178,15 @@ function App() {
 
               {/* Insights */}
               <div className="bg-white rounded-xl shadow-sm p-5">
-                <AIInsights expenses={expenses} savingsGoal={savingsGoal} salary={salary} />
+                <AIInsights
+                  expenses={expenses}
+                  savingsGoal={savingsGoal}
+                  salary={salary}
+                  goldPrice={goldPrice}
+                  goldPriceStatus={goldPriceStatus}
+                  goldPriceUpdatedAt={goldPriceUpdatedAt}
+                  onRefreshGoldPrice={fetchGoldPrice}
+                />
               </div>
             </div>
           </div>
@@ -148,7 +210,13 @@ function App() {
         {/* Right Section - 30% Width (Sticky Chat Panel) */}
         <div className="w-full xl:w-80 flex-shrink-0">
           <div className="sticky top-5 bg-white rounded-xl shadow-sm p-5 flex flex-col overflow-hidden" style={{ height: '78vh' }}>
-            <ChatBot expenses={expenses} salary={salary} savingsGoal={savingsGoal} />
+            <ChatBot
+              expenses={expenses}
+              salary={salary}
+              savingsGoal={savingsGoal}
+              goldPrice={goldPrice}
+              goldPriceStatus={goldPriceStatus}
+            />
           </div>
         </div>
       </div>

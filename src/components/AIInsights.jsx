@@ -1,8 +1,18 @@
 import { INVESTMENT_CATEGORY } from '../utils/financeUtils';
 
-export default function AIInsights({ expenses, savingsGoal, salary }) {
+export default function AIInsights({ expenses, savingsGoal, salary, goldPrice, goldPriceStatus, goldPriceUpdatedAt, onRefreshGoldPrice }) {
   // Calculate total spending
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  const goldInsightMessage = goldPriceStatus === 'loading'
+    ? 'Fetching latest gold price...'
+    : goldPriceStatus === 'error'
+    ? 'Live data unavailable, showing last known trend'
+    : `₹ ${goldPrice?.toFixed(2)} per unit`;
+
+  const goldLastUpdatedMessage = goldPriceUpdatedAt
+    ? `Last updated: ${new Date(goldPriceUpdatedAt).toLocaleTimeString()}`
+    : 'Last updated: —';
 
   // If no expenses, show empty state with assistant message
   if (expenses.length === 0) {
@@ -17,6 +27,21 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
         <div className="text-center py-8">
           <p className="text-gray-600 text-sm font-medium mb-1">Add your first expense to begin</p>
           <p className="text-gray-400 text-xs">I'll provide personalized insights and advice</p>
+        </div>
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-md p-4 mt-4">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-yellow-700 font-semibold text-sm">Live Gold Price</p>
+            <button
+              type="button"
+              onClick={onRefreshGoldPrice}
+              disabled={goldPriceStatus === 'loading'}
+              className="text-xs font-medium px-2 py-1 rounded border border-yellow-300 text-yellow-700 hover:bg-yellow-100 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="text-yellow-700 text-sm mt-1">{goldInsightMessage}</p>
+          <p className="text-yellow-600 text-xs mt-1">{goldLastUpdatedMessage}</p>
         </div>
       </div>
     );
@@ -299,6 +324,24 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
     </div>
   );
 
+  insights.push(
+    <div key="live-gold-price" className="bg-yellow-50 border-l-4 border-yellow-400 rounded-md p-4">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-yellow-700 font-semibold text-sm">Live Gold Price</p>
+        <button
+          type="button"
+          onClick={onRefreshGoldPrice}
+          disabled={goldPriceStatus === 'loading'}
+          className="text-xs font-medium px-2 py-1 rounded border border-yellow-300 text-yellow-700 hover:bg-yellow-100 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          Refresh
+        </button>
+      </div>
+      <p className="text-yellow-700 text-sm mt-1">{goldInsightMessage}</p>
+      <p className="text-yellow-600 text-xs mt-1">{goldLastUpdatedMessage}</p>
+    </div>
+  );
+
   // Insight 4: Actionable savings advice
   if (topCategoryName) {
     insights.push(
@@ -349,6 +392,11 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
             <li><span className="font-semibold">Gold:</span> A traditional, stable investment option</li>
             <li><span className="font-semibold">Bonds:</span> Lower risk, fixed income investments</li>
           </ul>
+          <p className="text-amber-600 text-sm mt-2">
+            {goldPriceStatus === 'success'
+              ? `Current gold price is ₹${goldPrice.toFixed(2)}. Consider investing based on trend.`
+              : 'Live data unavailable, showing last known trend'}
+          </p>
           <p className="text-amber-600 text-xs mt-2 italic">Diversify your investments to reduce risk and maximize returns</p>
         </div>
       );
@@ -362,6 +410,11 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
             <li><span className="font-semibold">Mutual Funds:</span> Start with index funds or balanced funds</li>
             <li><span className="font-semibold">Recurring Deposits:</span> Guaranteed returns with minimal risk</li>
           </ul>
+          <p className="text-amber-600 text-sm mt-2">
+            {goldPriceStatus === 'success'
+              ? `Current gold price is ₹${goldPrice.toFixed(2)}. Consider investing based on trend.`
+              : 'Live data unavailable, showing last known trend'}
+          </p>
           <p className="text-amber-600 text-xs mt-2 italic">Build your investment habit early—every rupee compounds over time</p>
         </div>
       );
@@ -375,6 +428,11 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
             <li><span className="font-semibold">High-yield savings accounts:</span> Better interest than regular savings</li>
             <li><span className="font-semibold">Emergency fund:</span> Build 3-6 months of expenses first</li>
           </ul>
+          <p className="text-amber-600 text-sm mt-2">
+            {goldPriceStatus === 'success'
+              ? `Current gold price is ₹${goldPrice.toFixed(2)}. Consider investing based on trend.`
+              : 'Live data unavailable, showing last known trend'}
+          </p>
           <p className="text-amber-600 text-xs mt-2 italic">Focus on building your emergency fund before investing</p>
         </div>
       );

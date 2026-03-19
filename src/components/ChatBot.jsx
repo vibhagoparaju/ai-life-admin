@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { INVESTMENT_CATEGORY } from '../utils/financeUtils';
 
-export default function ChatBot({ expenses, salary, savingsGoal }) {
+export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, goldPriceStatus }) {
   const [userName, setUserName] = useState('Vibha');
   const [isEditingName, setIsEditingName] = useState(false);
   const [messages, setMessages] = useState([
@@ -119,6 +119,18 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
     const [topCategory, topAmount] = getTopCategory();
     const trend = getSpendingTrend();
     const { investmentTotal, topInvestment } = getInvestmentDetails();
+
+    if (query.includes('gold')) {
+      if (goldPriceStatus === 'loading') {
+        return `${userName}, fetching latest gold price... I'll use the live value for your next decision.`;
+      }
+
+      if (goldPriceStatus === 'error' || goldPrice === null) {
+        return `${userName}, live data unavailable, showing last known trend. Gold remains useful for diversification when added gradually with SIPs.`;
+      }
+
+      return `${userName}, current gold price is ₹${goldPrice.toFixed(2)} per unit. Consider investing based on trend and your monthly savings plan.`;
+    }
 
     if (query.includes('can i afford this') || query.includes('can i afford')) {
       if (salary === 0) {
@@ -322,6 +334,12 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
 
       if (investmentTotal > 0) {
         response += ` You already invested ₹${investmentTotal.toFixed(2)}${topInvestment[0] ? `, with ${topInvestment[0]} leading` : ''}.`;
+      }
+
+      if (goldPriceStatus === 'success' && typeof goldPrice === 'number') {
+        response += ` Current gold price is ₹${goldPrice.toFixed(2)} per unit.`;
+      } else if (goldPriceStatus === 'error') {
+        response += ' Live data unavailable, showing last known trend.';
       }
 
       return response;
