@@ -1,5 +1,6 @@
-export default function SummaryCard({ expenses }) {
+export default function SummaryCard({ expenses, salary }) {
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const remainingBalance = salary - totalSpending;
 
   // Calculate category-wise breakdown
   const categoryBreakdown = expenses.reduce((breakdown, expense) => {
@@ -32,6 +33,26 @@ export default function SummaryCard({ expenses }) {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-gray-700 mb-2">Monthly Report</h2>
         <p className="text-xs text-gray-500 mb-6">Your spending overview and insights</p>
+        
+        {/* Income & Balance Section */}
+        {salary > 0 ? (
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+              <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">Total Balance</p>
+              <p className="text-2xl font-bold text-green-600">₹{salary.toFixed(2)}</p>
+            </div>
+            <div className={`rounded-lg p-4 border ${remainingBalance >= 0 ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200' : 'bg-gradient-to-r from-red-50 to-pink-50 border-red-200'}`}>
+              <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">Remaining Balance</p>
+              <p className={`text-2xl font-bold ${remainingBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>₹{Math.abs(remainingBalance).toFixed(2)}</p>
+              {remainingBalance < 0 && <p className="text-xs text-red-500 mt-1">Over budget</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-lg p-6 text-center border border-gray-200 mb-6">
+            <p className="text-gray-600 text-sm font-medium">Add your income to track balance</p>
+            <p className="text-gray-400 text-xs mt-2">Set your monthly income above to see your remaining balance</p>
+          </div>
+        )}
         
         {/* If no expenses - show empty state */}
         {expenses.length === 0 ? (

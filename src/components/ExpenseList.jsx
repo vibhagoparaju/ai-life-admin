@@ -1,4 +1,12 @@
 export default function ExpenseList({ expenses }) {
+  const formatTime = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
   if (expenses.length === 0) {
     return (
       <div className="text-center py-12">
@@ -18,7 +26,14 @@ export default function ExpenseList({ expenses }) {
               key={index}
               className="flex justify-between items-center p-4 hover:bg-gray-50 transition duration-200"
             >
-              <span className="font-medium text-gray-700">{expense.category}</span>
+              <div className="flex-1">
+                <span className="font-medium text-gray-700 block">{expense.category}</span>
+                {expense.timestamp && (
+                  <span className="text-xs text-gray-500 mt-1">
+                    {formatTime(expense.timestamp)}
+                  </span>
+                )}
+              </div>
               <span className="font-semibold text-indigo-600">₹{expense.amount.toFixed(2)}</span>
             </li>
           ))}

@@ -1,4 +1,4 @@
-export default function AIInsights({ expenses, savingsGoal }) {
+export default function AIInsights({ expenses, savingsGoal, salary }) {
   // Calculate total spending
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
@@ -89,6 +89,22 @@ export default function AIInsights({ expenses, savingsGoal }) {
   // Build insights
   const insights = [];
 
+  // Daily Finance Assistant greeting (featured first card)
+  const assistantGreeting = salary > 0
+    ? "Hello! Your income is ₹" + salary.toFixed(2) + " and you've spent ₹" + totalSpending.toFixed(2) + " so far, leaving ₹" + (salary - totalSpending).toFixed(2) + " remaining. Mostly spent on " + topCategoryName + "."
+    : "Hello! You've spent ₹" + totalSpending.toFixed(2) + " so far, mostly on " + topCategoryName + ". " + 
+    (savingsGoal > 0 && totalSpending > savingsGoal 
+      ? "Try reducing " + topCategoryName + " to stay within your ₹" + savingsGoal.toFixed(2) + " goal."
+      : savingsGoal > 0 
+      ? "You're on track with your ₹" + savingsGoal.toFixed(2) + " goal—great work!"
+      : "Keep tracking to reach your financial goals.");
+
+  insights.push(
+    <div key="daily-assistant" className="p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-md shadow-sm">
+      <p className="text-indigo-700 text-sm leading-relaxed font-medium">{assistantGreeting}</p>
+    </div>
+  );
+
   // Insight 1: Total spending with advice
   if (totalSpending > 10000) {
     insights.push(
@@ -170,6 +186,27 @@ export default function AIInsights({ expenses, savingsGoal }) {
     );
   }
 
+  // Insight: Income and Remaining Balance
+  if (salary > 0) {
+    const remainingBalance = salary - totalSpending;
+    const balanceColor = remainingBalance >= 0 ? "blue" : "red";
+    const balanceBg = remainingBalance >= 0 ? "bg-blue-50" : "bg-red-50";
+    const balanceBorder = remainingBalance >= 0 ? "border-blue-400" : "border-red-400";
+    const balanceText = remainingBalance >= 0 ? "text-blue-700" : "text-red-700";
+    const balanceBody = remainingBalance >= 0 ? "text-blue-600" : "text-red-600";
+
+    insights.push(
+      <div key="balance-tracking" className={`p-4 ${balanceBg} border-l-4 ${balanceBorder} rounded-md`}>
+        <p className={`${balanceText} font-semibold text-sm`}>Income & Balance</p>
+        <p className={`${balanceBody} text-sm mt-1`}>Monthly income: <span className="font-semibold">₹{salary.toFixed(2)}</span></p>
+        <p className={`${balanceBody} text-sm mt-1`}>Remaining balance: <span className="font-semibold">₹{Math.abs(remainingBalance).toFixed(2)}</span></p>
+        {remainingBalance < 0 && (
+          <p className={`${balanceBody} text-sm mt-2`}>You've exceeded your income by ₹{Math.abs(remainingBalance).toFixed(2)}. Consider increasing savings.</p>
+        )}
+      </div>
+    );
+  }
+
   // Insight 1.6: Spending trend analysis
   if (trendMessage) {
     const trendBg = trendColor === "red" ? "bg-red-50" : trendColor === "green" ? "bg-green-50" : "bg-blue-50";
@@ -230,7 +267,54 @@ export default function AIInsights({ expenses, savingsGoal }) {
     );
   }
 
-  // Insight 7: Motivation message
+  // Insight 7: Investment Suggestions based on savings
+  if (salary > 0) {
+    const remainingBalance = salary - totalSpending;
+    
+    if (remainingBalance >= 10000) {
+      insights.push(
+        <div key="investment-suggestions" className="p-4 bg-amber-50 border-l-4 border-amber-400 rounded-md">
+          <p className="text-amber-700 font-semibold text-sm">💡 Investment Suggestions</p>
+          <p className="text-amber-600 text-sm mt-2">With ₹{remainingBalance.toFixed(2)} in savings, you have great options:</p>
+          <ul className="text-amber-600 text-sm mt-2 list-disc list-inside space-y-1">
+            <li><span className="font-semibold">Stocks:</span> Build long-term wealth through equity investments</li>
+            <li><span className="font-semibold">SIP (Systematic Investment Plan):</span> Regular small investments in mutual funds</li>
+            <li><span className="font-semibold">Gold:</span> A traditional, stable investment option</li>
+            <li><span className="font-semibold">Bonds:</span> Lower risk, fixed income investments</li>
+          </ul>
+          <p className="text-amber-600 text-xs mt-2 italic">Diversify your investments to reduce risk and maximize returns</p>
+        </div>
+      );
+    } else if (remainingBalance >= 5000) {
+      insights.push(
+        <div key="investment-suggestions" className="p-4 bg-amber-50 border-l-4 border-amber-400 rounded-md">
+          <p className="text-amber-700 font-semibold text-sm">💡 Investment Suggestions</p>
+          <p className="text-amber-600 text-sm mt-2">With ₹{remainingBalance.toFixed(2)} in savings, consider:</p>
+          <ul className="text-amber-600 text-sm mt-2 list-disc list-inside space-y-1">
+            <li><span className="font-semibold">Gold:</span> A safe, reliable investment for beginners</li>
+            <li><span className="font-semibold">Mutual Funds:</span> Start with index funds or balanced funds</li>
+            <li><span className="font-semibold">Recurring Deposits:</span> Guaranteed returns with minimal risk</li>
+          </ul>
+          <p className="text-amber-600 text-xs mt-2 italic">Build your investment habit early—every rupee compounds over time</p>
+        </div>
+      );
+    } else if (remainingBalance > 1000) {
+      insights.push(
+        <div key="investment-suggestions" className="p-4 bg-amber-50 border-l-4 border-amber-400 rounded-md">
+          <p className="text-amber-700 font-semibold text-sm">💡 Investment Suggestions</p>
+          <p className="text-amber-600 text-sm mt-2">You have ₹{remainingBalance.toFixed(2)} remaining. Here's how to grow it:</p>
+          <ul className="text-amber-600 text-sm mt-2 list-disc list-inside space-y-1">
+            <li><span className="font-semibold">Start small:</span> Even ₹500-1000 monthly investments add up</li>
+            <li><span className="font-semibold">High-yield savings accounts:</span> Better interest than regular savings</li>
+            <li><span className="font-semibold">Emergency fund:</span> Build 3-6 months of expenses first</li>
+          </ul>
+          <p className="text-amber-600 text-xs mt-2 italic">Focus on building your emergency fund before investing</p>
+        </div>
+      );
+    }
+  }
+
+  // Insight 8: Motivation message
   insights.push(
     <div key="motivation" className="p-4 bg-purple-50 border-l-4 border-purple-400 rounded-md">
       <p className="text-purple-700 font-semibold text-sm">Budget Tip</p>

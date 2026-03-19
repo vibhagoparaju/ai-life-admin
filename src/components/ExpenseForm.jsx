@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-export default function ExpenseForm({ onAddExpense, onSetGoal }) {
+export default function ExpenseForm({ onAddExpense, onSetGoal, onSetSalary, onSimulate }) {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [goal, setGoal] = useState('');
+  const [salary, setSalary] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -24,12 +25,33 @@ export default function ExpenseForm({ onAddExpense, onSetGoal }) {
     onSetGoal(goalValue);
   };
 
+  const handleSalaryChange = (e) => {
+    const salaryValue = e.target.value;
+    setSalary(salaryValue);
+    onSetSalary(salaryValue);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="w-full">
       <h2 className="text-lg font-semibold text-gray-700 mb-1">Add Expense</h2>
       <p className="text-xs text-gray-500 mb-6">Track your spending to see insights</p>
       
       <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-2">Monthly Income/Salary (₹)</label>
+          <input
+            id="salary"
+            type="number"
+            step="0.01"
+            value={salary}
+            onChange={handleSalaryChange}
+            placeholder="e.g., 50000"
+            className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200 bg-green-50"
+          />
+        </div>
+
+        <hr className="border-gray-200" />
+
         <div>
           <label className="block text-sm font-medium text-gray-600 mb-2">Monthly Savings Goal (₹)</label>
           <input
@@ -76,6 +98,14 @@ export default function ExpenseForm({ onAddExpense, onSetGoal }) {
         className="w-full mt-6 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200"
       >
         Add Expense +
+      </button>
+
+      <button
+        type="button"
+        onClick={onSimulate}
+        className="w-full mt-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200"
+      >
+        ✨ Simulate Daily Expenses
       </button>
     </form>
   );
