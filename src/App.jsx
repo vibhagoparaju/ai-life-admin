@@ -7,31 +7,7 @@ import AIInsights from './components/AIInsights'
 import ChatBot from './components/ChatBot'
 import InvestmentSuggestions from './components/InvestmentSuggestions'
 import DailyBriefing from './components/DailyBriefing'
-
-// Smart category grouping mapping
-const CATEGORY_MAPPINGS = {
-  'Transport': ['bus', 'auto', 'cab', 'taxi', 'transport', 'fuel', 'petrol', 'diesel', 'metro', 'train', 'ride', 'uber', 'travel'],
-  'Food': ['swiggy', 'zomato', 'food', 'restaurant', 'dining', 'cafe', 'coffee', 'pizza', 'burger', 'delivery'],
-  'Housing': ['rent', 'housing', 'apartment', 'house', 'mortgage', 'home'],
-  'Utilities': ['electricity', 'utilities', 'water', 'internet', 'phone', 'bill', 'broadband'],
-  'Entertainment': ['movie', 'cinema', 'entertainment', 'games', 'subscription', 'netflix', 'spotify', 'streaming'],
-  'Grocery': ['grocery', 'supermarket', 'market', 'shopping', 'vegetables', 'fruits'],
-  'Health': ['medicine', 'doctor', 'hospital', 'health', 'gym', 'fitness', 'pharma', 'medical']
-};
-
-// Function to get the main category group from user input
-const getCategoryGroup = (userCategory) => {
-  const categoryLower = userCategory.toLowerCase().trim();
-  
-  for (const [mainCategory, keywords] of Object.entries(CATEGORY_MAPPINGS)) {
-    if (keywords.includes(categoryLower)) {
-      return mainCategory;
-    }
-  }
-  
-  // If not found in mappings, capitalize and return the original
-  return userCategory.charAt(0).toUpperCase() + userCategory.slice(1);
-};
+import { detectExpenseCategory } from './utils/financeUtils'
 
 function App() {
   const [expenses, setExpenses] = useState([])
@@ -66,6 +42,7 @@ function App() {
       newExpenses.push({
         amount: amount,
         category: randomExpense.category,
+        subcategory: randomExpense.category,
         timestamp: timestamp.toISOString()
       });
     }
@@ -83,9 +60,12 @@ function App() {
   };
 
   const handleAddExpense = (expense) => {
+    const { category, subcategory } = detectExpenseCategory(expense.category)
+
     const normalizedExpense = {
       ...expense,
-      category: getCategoryGroup(expense.category),
+      category,
+      subcategory,
       timestamp: new Date().toISOString()
     };
     setExpenses([...expenses, normalizedExpense])
@@ -100,19 +80,18 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-gray-100 py-8 px-4">
       {/* Header */}
-      <div className="max-w-6xl mx-auto mb-10">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">AI Life Admin</h1>
-            <p className="text-gray-500 text-sm mt-1">Smart expense tracking and financial insights</p>
-          </div>
+      <div className="max-w-7xl mx-auto mb-10">
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-7 shadow-md">
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">AI Life Admin</h1>
+          <p className="mt-2 text-sm font-medium text-indigo-100">Your AI Finance Assistant</p>
+          <p className="mt-1 text-sm text-purple-100">Smart expense tracking, investment awareness, and decision-ready insights</p>
         </div>
 
         {/* Notification Toast */}
         {notification && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-300 rounded-lg text-green-700 text-sm font-medium animate-pulse">
+          <div className="mt-4 p-4 bg-green-50 border border-green-300 rounded-lg text-green-700 text-sm font-medium">
             {notification}
           </div>
         )}
@@ -124,9 +103,9 @@ function App() {
       </div>
 
       {/* Main Layout - Flex with Left & Right Sections */}
-      <div className="max-w-7xl mx-auto flex gap-6">
+      <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-6 xl:items-start">
         {/* Left Section - 70% Width */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 xl:pr-1">
           {/* Two Column Grid for Form & Summary/Insights */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             {/* Left Column - Form (Sticky) */}
@@ -167,8 +146,8 @@ function App() {
         </div>
 
         {/* Right Section - 30% Width (Sticky Chat Panel) */}
-        <div className="w-80 flex-shrink-0">
-          <div className="sticky top-5 bg-white rounded-xl shadow-sm p-5 flex flex-col overflow-hidden" style={{ height: '80vh' }}>
+        <div className="w-full xl:w-80 flex-shrink-0">
+          <div className="sticky top-5 bg-white rounded-xl shadow-sm p-5 flex flex-col overflow-hidden" style={{ height: '78vh' }}>
             <ChatBot expenses={expenses} salary={salary} savingsGoal={savingsGoal} />
           </div>
         </div>

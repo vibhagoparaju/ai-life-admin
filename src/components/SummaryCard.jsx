@@ -1,3 +1,5 @@
+import { INVESTMENT_CATEGORY } from '../utils/financeUtils';
+
 export default function SummaryCard({ expenses, salary }) {
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const remainingBalance = salary - totalSpending;
@@ -22,6 +24,15 @@ export default function SummaryCard({ expenses, salary }) {
   const topCategoryName = topCategory[0];
   const topCategoryAmount = topCategory[1];
   const topCategoryPercentage = totalSpending > 0 ? ((topCategoryAmount / totalSpending) * 100).toFixed(1) : 0;
+
+  const sortedCategories = Object.entries(categoryBreakdown).sort((a, b) => b[1] - a[1]);
+  const topTwoTotal = sortedCategories.slice(0, 2).reduce((sum, [, amount]) => sum + amount, 0);
+  const topTwoPercentage = totalSpending > 0 ? ((topTwoTotal / totalSpending) * 100).toFixed(1) : 0;
+  const spendingIncomeRatio = salary > 0 ? ((totalSpending / salary) * 100).toFixed(1) : null;
+  const investmentSpending = expenses
+    .filter((expense) => expense.category === INVESTMENT_CATEGORY)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const investmentPercentage = totalSpending > 0 ? ((investmentSpending / totalSpending) * 100).toFixed(1) : 0;
 
   // Calculate key metrics
   const totalCategories = Object.keys(categoryBreakdown).length;
@@ -72,7 +83,7 @@ export default function SummaryCard({ expenses, salary }) {
             {/* Key Insights Summary */}
             {totalSpending > 0 && (
               <>
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   {/* Top Category Card */}
                   {topCategoryName && (
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
@@ -91,6 +102,30 @@ export default function SummaryCard({ expenses, salary }) {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                    <p className="text-xs font-medium text-indigo-700 uppercase tracking-wide mb-1">Spending vs Income</p>
+                    <p className="text-lg font-bold text-indigo-700">
+                      {spendingIncomeRatio !== null ? `${spendingIncomeRatio}%` : 'Set Income'}
+                    </p>
+                    <p className="text-xs text-indigo-600 mt-1">
+                      {spendingIncomeRatio !== null ? 'of your monthly income spent' : 'Add salary to unlock this metric'}
+                    </p>
+                  </div>
+
+                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                    <p className="text-xs font-medium text-orange-700 uppercase tracking-wide mb-1">Top 2 Categories</p>
+                    <p className="text-lg font-bold text-orange-700">{topTwoPercentage}%</p>
+                    <p className="text-xs text-orange-600 mt-1">combined share of total spending</p>
+                  </div>
+
+                  <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                    <p className="text-xs font-medium text-emerald-700 uppercase tracking-wide mb-1">Investment Share</p>
+                    <p className="text-lg font-bold text-emerald-700">{investmentPercentage}%</p>
+                    <p className="text-xs text-emerald-600 mt-1">₹{investmentSpending.toFixed(2)} allocated to investments</p>
+                  </div>
+                </div>
+
                 {/* Simple Summary Text */}
                 {topCategoryName && (
                   <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -100,6 +135,11 @@ export default function SummaryCard({ expenses, salary }) {
                     <p className="text-sm text-gray-700 mb-2">
                       You spent <span className="font-semibold text-indigo-600">{topCategoryPercentage}%</span> on {topCategoryName}
                     </p>
+                    {investmentSpending > 0 && (
+                      <p className="text-sm text-gray-700 mb-2">
+                        Investment category spending is <span className="font-semibold text-emerald-600">₹{investmentSpending.toFixed(2)}</span>
+                      </p>
+                    )}
                     <p className="text-sm text-gray-600">
                       Your spending is mostly focused on <span className="font-semibold">{topCategoryName}</span>
                     </p>

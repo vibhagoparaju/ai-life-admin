@@ -1,3 +1,5 @@
+import { INVESTMENT_CATEGORY } from '../utils/financeUtils';
+
 export default function AIInsights({ expenses, savingsGoal, salary }) {
   // Calculate total spending
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -47,19 +49,48 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
   const topCategoryAmount = topCategory[1];
   const topCategoryPercentage = categoryPercentages[topCategoryName]?.percentage || 0;
 
+  const investmentSpending = expenses
+    .filter((expense) => expense.category === INVESTMENT_CATEGORY)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+
+  const investmentPercentage = totalSpending > 0
+    ? ((investmentSpending / totalSpending) * 100).toFixed(1)
+    : '0.0';
+
+  const investmentSubcategorySpending = expenses
+    .filter((expense) => expense.category === INVESTMENT_CATEGORY)
+    .reduce((acc, expense) => {
+      const subcategory = expense.subcategory || INVESTMENT_CATEGORY;
+      acc[subcategory] = (acc[subcategory] || 0) + expense.amount;
+      return acc;
+    }, {});
+
+  const topInvestment = Object.entries(investmentSubcategorySpending).reduce(
+    (max, [subcategory, amount]) => (amount > max[1] ? [subcategory, amount] : max),
+    ['', 0]
+  );
+
   // Calculate potential savings (20% reduction)
   const potentialSavings = (topCategoryAmount * 0.2).toFixed(2);
 
-  // Find top 2-3 categories for deeper analysis
+  // Find top categories for deeper analysis
   const sortedCategories = Object.entries(categorySpending)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
+    .sort((a, b) => b[1] - a[1]);
 
-  const topCategoriesNames = sortedCategories.map(([name]) => name);
-  const topCategoriesCombinedAmount = sortedCategories.reduce((sum, [, amount]) => sum + amount, 0);
+  const topCategoriesNames = sortedCategories.slice(0, 3).map(([name]) => name);
+  const topTwoCategories = sortedCategories.slice(0, 2);
+  const topTwoCombinedAmount = topTwoCategories.reduce((sum, [, amount]) => sum + amount, 0);
+  const topTwoCombinedPercentage = totalSpending > 0
+    ? ((topTwoCombinedAmount / totalSpending) * 100).toFixed(1)
+    : 0;
+
+  const topCategoriesCombinedAmount = sortedCategories.slice(0, 3).reduce((sum, [, amount]) => sum + amount, 0);
   const topCategoriesCombinedPercentage = totalSpending > 0 
     ? ((topCategoriesCombinedAmount / totalSpending) * 100).toFixed(1) 
     : 0;
+
+  const spendingIncomeRatio = salary > 0 ? ((totalSpending / salary) * 100).toFixed(1) : null;
+  const savingsRate = salary > 0 ? (((salary - totalSpending) / salary) * 100).toFixed(1) : null;
 
   // Detect spending trend (recent vs earlier)
   let trendMessage = "";
@@ -205,7 +236,29 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
         )}
       </div>
     );
+
   }
+
+  insights.push(
+    <div key="financial-health-summary" className="p-4 bg-violet-50 border-l-4 border-violet-400 rounded-md">
+      <p className="text-violet-700 font-semibold text-sm">Financial Health Summary</p>
+      <p className="text-violet-600 text-sm mt-1">
+        {salary > 0
+          ? `You are saving ${savingsRate}% of your income this month.`
+          : 'Set your monthly income to track your savings rate.'}
+      </p>
+      <p className="text-violet-600 text-sm mt-1">
+        {salary > 0
+          ? `Spending vs income ratio is ${spendingIncomeRatio}%.`
+          : 'Spending vs income ratio is not available yet.'}
+      </p>
+      <p className="text-violet-600 text-sm mt-1">
+        {topTwoCategories.length > 1
+          ? `${topTwoCategories[0][0]} and ${topTwoCategories[1][0]} make up ${topTwoCombinedPercentage}% of your total spending.`
+          : `${topCategoryName || 'Your top category'} makes up ${topCategoryPercentage}% of your total spending.`}
+      </p>
+    </div>
+  );
 
   // Insight 1.6: Spending trend analysis
   if (trendMessage) {
@@ -231,6 +284,20 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
       </div>
     );
   }
+
+  insights.push(
+    <div key="investment-ratio" className="p-4 bg-emerald-50 border-l-4 border-emerald-400 rounded-md">
+      <p className="text-emerald-700 font-semibold text-sm">Investment Allocation</p>
+      <p className="text-emerald-600 text-sm mt-1">
+        You have allocated ₹{investmentSpending.toFixed(2)} ({investmentPercentage}%) to investment-related spending.
+      </p>
+      {topInvestment[0] && (
+        <p className="text-emerald-600 text-sm mt-1">
+          Top investment subcategory: <span className="font-semibold">{topInvestment[0]}</span> (₹{topInvestment[1].toFixed(2)})
+        </p>
+      )}
+    </div>
+  );
 
   // Insight 4: Actionable savings advice
   if (topCategoryName) {
@@ -314,6 +381,31 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
     }
   }
 
+  insights.push(
+    <div key="rd-suggestions" className="p-4 bg-sky-50 border-l-4 border-sky-400 rounded-md">
+      <p className="text-sky-700 font-semibold text-sm">Recurring Deposit Suggestions</p>
+      <div className="mt-2 space-y-2 text-sm text-sky-700">
+        <div className="flex items-start justify-between gap-4">
+          <span className="font-medium">SBI RD</span>
+          <span className="font-semibold">6.5%</span>
+        </div>
+        <p className="text-xs text-sky-600">Best for stable monthly saving with low risk.</p>
+
+        <div className="flex items-start justify-between gap-4 pt-1">
+          <span className="font-medium">HDFC RD</span>
+          <span className="font-semibold">7.0%</span>
+        </div>
+        <p className="text-xs text-sky-600">Suitable if you want slightly higher returns with predictable growth.</p>
+
+        <div className="flex items-start justify-between gap-4 pt-1">
+          <span className="font-medium">ICICI RD</span>
+          <span className="font-semibold">6.8%</span>
+        </div>
+        <p className="text-xs text-sky-600">Balanced option for disciplined savings and liquidity planning.</p>
+      </div>
+    </div>
+  );
+
   // Insight 8: Motivation message
   insights.push(
     <div key="motivation" className="p-4 bg-purple-50 border-l-4 border-purple-400 rounded-md">
@@ -324,7 +416,7 @@ export default function AIInsights({ expenses, savingsGoal, salary }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-gray-700 mb-4\">Financial Insights</h2>
+      <h2 className="text-lg font-semibold text-gray-700 mb-4">Financial Insights</h2>
       <div className="space-y-3">
         {insights}
       </div>

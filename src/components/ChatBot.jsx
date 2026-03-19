@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { INVESTMENT_CATEGORY } from '../utils/financeUtils';
 
 export default function ChatBot({ expenses, salary, savingsGoal }) {
   const [userName, setUserName] = useState('Vibha');
@@ -22,6 +23,11 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const remainingBalance = salary - totalSpending;
 
+  const parseAmountFromQuery = (queryText) => {
+    const matchedAmount = queryText.match(/(\d+(?:\.\d+)?)/);
+    return matchedAmount ? parseFloat(matchedAmount[1]) : null;
+  };
+
   // Get top category
   const getCategoryBreakdown = () => {
     return expenses.reduce((breakdown, expense) => {
@@ -42,6 +48,26 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
       ['', 0]
     );
     return topCategory;
+  };
+
+  const getInvestmentDetails = () => {
+    const investmentExpenses = expenses.filter((expense) => expense.category === INVESTMENT_CATEGORY);
+    const investmentTotal = investmentExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const investmentSubcategories = investmentExpenses.reduce((acc, expense) => {
+      const subcategory = expense.subcategory || INVESTMENT_CATEGORY;
+      acc[subcategory] = (acc[subcategory] || 0) + expense.amount;
+      return acc;
+    }, {});
+
+    const topInvestment = Object.entries(investmentSubcategories).reduce(
+      (max, [subcategory, amount]) => (amount > max[1] ? [subcategory, amount] : max),
+      ['', 0]
+    );
+
+    return {
+      investmentTotal,
+      topInvestment
+    };
   };
 
   // Detect spending trend
@@ -92,6 +118,54 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
     const categoryDetails = getCategoryDetails();
     const [topCategory, topAmount] = getTopCategory();
     const trend = getSpendingTrend();
+    const { investmentTotal, topInvestment } = getInvestmentDetails();
+
+    if (query.includes('can i afford this') || query.includes('can i afford')) {
+      if (salary === 0) {
+        return `${userName}, set your monthly income first and I will check affordability in real time.`;
+      }
+
+      const askedAmount = parseAmountFromQuery(query);
+
+      if (!askedAmount) {
+        const comfortBuffer = remainingBalance * 0.2;
+        if (remainingBalance > 0) {
+          return `Based on your current balance of ₹${remainingBalance.toFixed(2)}, you can afford this comfortably if the cost stays below ₹${(remainingBalance - comfortBuffer).toFixed(2)}.`;
+        }
+        return `Based on your current balance, you cannot afford this comfortably right now. You are overspent by ₹${Math.abs(remainingBalance).toFixed(2)}.`;
+      }
+
+      const postPurchaseBalance = remainingBalance - askedAmount;
+      if (postPurchaseBalance >= 0) {
+        return `Based on your current balance of ₹${remainingBalance.toFixed(2)}, you can afford this comfortably. After buying ₹${askedAmount.toFixed(2)}, you will still have ₹${postPurchaseBalance.toFixed(2)}.`;
+      }
+
+      return `Based on your current balance of ₹${remainingBalance.toFixed(2)}, you cannot afford this comfortably. This purchase creates a gap of ₹${Math.abs(postPurchaseBalance).toFixed(2)}.`;
+    }
+
+    if (query.includes('should i buy')) {
+      if (salary === 0) {
+        return `${userName}, share your income first so I can judge if this purchase is safe.`;
+      }
+
+      const askedAmount = parseAmountFromQuery(query);
+      const spendingRatio = salary > 0 ? (totalSpending / salary) * 100 : 0;
+
+      if (!askedAmount) {
+        if (remainingBalance > 0 && spendingRatio < 70) {
+          return `You are spending ${spendingRatio.toFixed(1)}% of income and still have ₹${remainingBalance.toFixed(2)} left. You can buy it if it doesn't disturb your savings goal.`;
+        }
+
+        return `Your current spending is ${spendingRatio.toFixed(1)}% of income with ₹${remainingBalance.toFixed(2)} left. I suggest waiting or choosing a lower-cost option this month.`;
+      }
+
+      const postPurchaseBalance = remainingBalance - askedAmount;
+      if (postPurchaseBalance >= savingsGoal && spendingRatio <= 75) {
+        return `Yes, this looks manageable. Even after ₹${askedAmount.toFixed(2)}, you should keep ₹${postPurchaseBalance.toFixed(2)} and stay aligned with your savings goal.`;
+      }
+
+      return `I would pause this purchase for now. Buying ₹${askedAmount.toFixed(2)} leaves ₹${postPurchaseBalance.toFixed(2)}, which can weaken your savings plan this month.`;
+    }
 
     // INTENT: "Spending" - Total + Trend + Actionable Savings
     if (query.includes('spending') || query.includes('spent') || query.includes('total spending') || query.includes('expense')) {
@@ -104,6 +178,10 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
       if (salary > 0) {
         const spendingPercent = ((totalSpending / salary) * 100).toFixed(1);
         response += `That's ${spendingPercent}% of your income. `;
+      }
+
+      if (investmentTotal > 0) {
+        response += `You have also tagged ₹${investmentTotal.toFixed(2)} as investments${topInvestment[0] ? `, mostly ${topInvestment[0]}` : ''}. `;
       }
 
       // Add trend info
@@ -181,24 +259,69 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
         return `${userName}, set your monthly income first so I can see how much you can safely invest each month!`;
       }
 
+      const isMonthlyPlanRequest = query.includes('investment plan') || query.includes('plan for this month') || query.includes('monthly plan');
+      const isSafeProfile = query.includes('safe') || query.includes('conservative') || query.includes('low risk');
+      const isAggressiveProfile = query.includes('aggressive') || query.includes('high risk') || query.includes('growth');
+      const profileLabel = isSafeProfile ? 'Safe' : isAggressiveProfile ? 'Aggressive' : 'Balanced';
+
+      const getRatios = () => {
+        if (isSafeProfile) {
+          return { sip: 0.45, gold: 0.35, stocks: 0.2 };
+        }
+
+        if (isAggressiveProfile) {
+          return { sip: 0.35, gold: 0.2, stocks: 0.45 };
+        }
+
+        return { sip: 0.4, gold: 0.25, stocks: 0.35 };
+      };
+
       let response = '';
 
       if (remainingBalance <= 1000) {
-        response = `${userName}, you're saving ₹${remainingBalance.toFixed(2)}/month. Build an emergency fund of ₹10,000 first, then explore investments like gold or recurring deposits.`;
+        response = `${userName}, you're saving ₹${remainingBalance.toFixed(2)}/month. Keep this month simple: build emergency buffer and start a small RD or gold plan from ₹500.`;
       } else if (remainingBalance < 5000) {
         const investAmount = Math.floor(remainingBalance * 0.5);
-        response = `${userName}, you can invest ₹${investAmount}/month. Start with gold or mutual funds—these give steady returns. `;
-        response += `Keep ₹${(remainingBalance - investAmount).toFixed(2)} as emergency buffer.`;
+        const ratios = getRatios();
+        const sipAmount = Math.floor(investAmount * ratios.sip);
+        const goldAmount = Math.floor(investAmount * ratios.gold);
+        const stocksAmount = Math.floor(investAmount * ratios.stocks);
+
+        if (isMonthlyPlanRequest) {
+          return `${profileLabel} monthly plan: SIP ₹${sipAmount} | Gold ₹${goldAmount} | Stocks ₹${stocksAmount}. Keep ₹${(remainingBalance - investAmount).toFixed(2)} as emergency buffer.`;
+        }
+
+        response = `${userName}, you can invest around ₹${investAmount}/month. Start with SIP + gold for balance, and keep ₹${(remainingBalance - investAmount).toFixed(2)} as buffer.`;
       } else if (remainingBalance < 10000) {
         const investAmount = Math.floor(remainingBalance * 0.6);
-        response = `${userName}, with ₹${remainingBalance.toFixed(2)} monthly savings, invest ₹${investAmount} in mutual funds or SIPs. `;
-        response += `Diversify: ₹${Math.floor(investAmount * 0.5)} in SIPs, ₹${Math.floor(investAmount * 0.3)} in gold, ₹${Math.floor(investAmount * 0.2)} in high-yield savings.`;
+        const ratios = getRatios();
+        const sipAmount = Math.floor(investAmount * ratios.sip);
+        const goldAmount = Math.floor(investAmount * ratios.gold);
+        const stocksAmount = Math.floor(investAmount * ratios.stocks);
+
+        if (isMonthlyPlanRequest) {
+          return `${profileLabel} monthly plan: SIP ₹${sipAmount} | Gold ₹${goldAmount} | Stocks ₹${stocksAmount}. Reserve ₹${(remainingBalance - investAmount).toFixed(2)} for flexibility.`;
+        }
+
+        response = `${userName}, with ₹${remainingBalance.toFixed(2)} savings, invest ₹${investAmount} with a simple split. `;
+        response += `Try ₹${sipAmount} in SIP, ₹${goldAmount} in gold, and ₹${stocksAmount} in large-cap stocks.`;
       } else {
-        const stockAmount = Math.floor(remainingBalance * 0.4);
-        const sipAmount = Math.floor(remainingBalance * 0.3);
-        const goldAmount = Math.floor(remainingBalance * 0.2);
-        response = `${userName}, excellent savings! Invest ₹${stockAmount} in stocks/indices, ₹${sipAmount} in SIPs, ₹${goldAmount} in gold. `;
-        response += `This diversified portfolio harnesses growth potential while managing risk.`;
+        const investAmount = Math.floor(remainingBalance * 0.9);
+        const ratios = getRatios();
+        const stockAmount = Math.floor(investAmount * ratios.stocks);
+        const sipAmount = Math.floor(investAmount * ratios.sip);
+        const goldAmount = Math.floor(investAmount * ratios.gold);
+
+        if (isMonthlyPlanRequest) {
+          return `${profileLabel} monthly plan: SIP ₹${sipAmount} | Gold ₹${goldAmount} | Stocks ₹${stockAmount}. Keep ₹${Math.floor(remainingBalance * 0.1)} for cash/RD stability.`;
+        }
+
+        response = `${userName}, excellent savings! Invest ₹${stockAmount} in stocks, ₹${sipAmount} in SIPs, and ₹${goldAmount} in gold this month. `;
+        response += `Keep the rest in cash or RD for flexibility and stability.`;
+      }
+
+      if (investmentTotal > 0) {
+        response += ` You already invested ₹${investmentTotal.toFixed(2)}${topInvestment[0] ? `, with ${topInvestment[0]} leading` : ''}.`;
       }
 
       return response;
@@ -251,9 +374,12 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
         return `${userName}, no spending data yet. Add your first expense and I'll give you a full financial health check!`;
       }
 
-      const categoryCount = getCategoryBreakdown().length;
+      const categoryCount = Object.keys(getCategoryBreakdown()).length;
       let summary = `📊 Quick snapshot: ₹${totalSpending.toFixed(2)} spent in ${categoryCount} categories (${expenses.length} transactions). `;
       summary += `Top spender: ${topCategory} (₹${topAmount.toFixed(2)}). `;
+      if (investmentTotal > 0) {
+        summary += `Investments tracked: ₹${investmentTotal.toFixed(2)}. `;
+      }
 
       if (salary > 0) {
         summary += `Remaining: ₹${remainingBalance.toFixed(2)}. `;
@@ -297,7 +423,13 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
     const actionMessages = {
       'spending': 'What is my total spending this month?',
       'saving': 'How can I save more money?',
-      'investment': 'What are some investment ideas for me?'
+      'investment': 'What are some investment ideas for me?',
+      'afford': 'Can I afford this 2500 purchase?',
+      'buy': 'Should I buy this 3000 item?',
+      'monthlyInvestmentPlan': 'Give me an investment plan for this month.',
+      'safePlan': 'Give me a safe investment plan for this month.',
+      'balancedPlan': 'Give me a balanced investment plan for this month.',
+      'aggressivePlan': 'Give me an aggressive investment plan for this month.'
     };
 
     const messageText = actionMessages[action];
@@ -410,6 +542,42 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
           >
             Investment Ideas
           </button>
+          <button
+            onClick={() => handleQuickAction('afford')}
+            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
+          >
+            Can I Afford This?
+          </button>
+          <button
+            onClick={() => handleQuickAction('buy')}
+            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
+          >
+            Should I Buy?
+          </button>
+          <button
+            onClick={() => handleQuickAction('monthlyInvestmentPlan')}
+            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
+          >
+            Monthly Investment Plan
+          </button>
+          <button
+            onClick={() => handleQuickAction('safePlan')}
+            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
+          >
+            Safe Plan
+          </button>
+          <button
+            onClick={() => handleQuickAction('balancedPlan')}
+            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
+          >
+            Balanced Plan
+          </button>
+          <button
+            onClick={() => handleQuickAction('aggressivePlan')}
+            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
+          >
+            Aggressive Plan
+          </button>
         </div>
 
         {/* Input Box */}
@@ -430,7 +598,7 @@ export default function ChatBot({ expenses, salary, savingsGoal }) {
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          Try: "spending", "advice", "investment", "balance", or use quick buttons above
+          Try: "safe investment plan", "balanced investment plan", "aggressive investment plan", or use quick buttons above
         </p>
       </div>
     </div>
