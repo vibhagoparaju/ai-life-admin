@@ -1,7 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { INVESTMENT_CATEGORY } from '../utils/financeUtils';
+import { calculateSavings, canAfford, detectOverspending, getTopCategory as getTopSpendingCategory } from '../utils/financialEngine';
 
-export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, goldPriceStatus }) {
+export default function ChatBot({
+  expenses,
+  salary,
+  savingsGoal,
+  goalName,
+  goalAmount,
+  subscriptions
+}) {
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [userName, setUserName] = useState('Vibha');
   const [isEditingName, setIsEditingName] = useState(false);
   const [messages, setMessages] = useState([
@@ -12,12 +22,25 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
     }
   ]);
   const [input, setInput] = useState('');
+  const [launcherInput, setLauncherInput] = useState('');
+  const [liveGoldPrice, setLiveGoldPrice] = useState(null);
+  const [isResponding, setIsResponding] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    fetch('https://api.metals.live/v1/spot/gold')
+      .then((res) => res.json())
+      .then((data) => {
+        const parsed = Array.isArray(data) ? data[0]?.price || data[0]?.gold || null : null;
+        if (typeof parsed === 'number') setLiveGoldPrice(parsed);
+      })
+      .catch(() => {});
+  }, []);
 
   // Calculate metrics from expenses
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -106,8 +129,58 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
       .sort((a, b) => b.amount - a.amount);
   };
 
+  const getSubscriptionSummary = () => {
+    if (!subscriptions || subscriptions.length === 0) {
+      return {
+        total: 0,
+        topSubscription: null
+      };
+    }
+
+    const total = subscriptions.reduce((sum, item) => sum + item.amount, 0);
+    return {
+      total,
+      topSubscription: subscriptions[0]
+    };
+  };
+
+  const callOpenAIFallback = async (userQuery) => {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (!apiKey) return null;
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          temperature: 0.5,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a concise Indian finance assistant. Reply in 1-3 short sentences, friendly tone, include ₹ where helpful.'
+            },
+            {
+              role: 'user',
+              content: `Salary: ₹${salary.toFixed(2)}, Spending: ₹${totalSpending.toFixed(2)}, Savings goal: ₹${savingsGoal.toFixed(2)}, Goal name: ${goalName || 'N/A'}, User query: ${userQuery}`
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data?.choices?.[0]?.message?.content?.trim() || null;
+    } catch (error) {
+      return null;
+    }
+  };
+
   // Generate AI response based on user query
-  const generateResponse = (userQuery) => {
+  const generateRuleBasedResponse = (userQuery) => {
     const query = userQuery.toLowerCase().trim();
 
     // If no expenses, give generic help message
@@ -119,17 +192,50 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
     const [topCategory, topAmount] = getTopCategory();
     const trend = getSpendingTrend();
     const { investmentTotal, topInvestment } = getInvestmentDetails();
+    const engineSavings = calculateSavings(salary, expenses);
+    const topCategoryInfo = getTopSpendingCategory(expenses);
+    const effectiveGoldPrice = liveGoldPrice;
+    const stocks = [
+      { name: 'Reliance', trend: 'up' },
+      { name: 'TCS', trend: 'stable' }
+    ];
+
+    if (query.includes('future savings') || query.includes('future') || query.includes('prediction')) {
+      const monthlySavings = salary - totalSpending;
+      const yearlySavings = monthlySavings * 12;
+      return `${userName}, monthly savings are ₹${monthlySavings.toFixed(2)} and projected yearly savings are ₹${yearlySavings.toFixed(2)}.`;
+    }
+
+    if (query.includes('how am i doing')) {
+      const overspending = detectOverspending(salary, expenses);
+      if (expenses.length === 0) {
+        return `${userName}, start tracking expenses and I will show your financial health summary.`;
+      }
+      return `${userName}, you've saved ₹${Math.max(0, engineSavings).toFixed(2)} so far.\nTop spend is ${topCategoryInfo.category || 'N/A'} at ₹${topCategoryInfo.amount.toFixed(2)}.\n${overspending ? 'You are overspending right now, reduce top categories.' : 'You are on track. Keep this momentum.'}`;
+    }
+
+    if (query.includes('stock') || query.includes('stocks')) {
+      return `${stocks[0].name} is trending ${stocks[0].trend}, ${stocks[1].name} is ${stocks[1].trend}. Consider SIP for safer investment.`;
+    }
 
     if (query.includes('gold')) {
-      if (goldPriceStatus === 'loading') {
-        return `${userName}, fetching latest gold price... I'll use the live value for your next decision.`;
+      if (effectiveGoldPrice === null) {
+        return `${userName}, live gold data is unavailable right now.`;
       }
 
-      if (goldPriceStatus === 'error' || goldPrice === null) {
-        return `${userName}, live data unavailable, showing last known trend. Gold remains useful for diversification when added gradually with SIPs.`;
+      return `${userName}, current gold price is ₹${Number(effectiveGoldPrice).toFixed(2)}.`;
+    }
+
+    if (query.includes('subscription') || query.includes('subscriptions')) {
+      const { total, topSubscription } = getSubscriptionSummary();
+
+      if (total === 0) {
+        return `${userName}, I don't see repeating subscription patterns yet. Add more expense history and I'll detect them for you.`;
       }
 
-      return `${userName}, current gold price is ₹${goldPrice.toFixed(2)} per unit. Consider investing based on trend and your monthly savings plan.`;
+      const topName = topSubscription?.name || 'your top subscription';
+      const topAmount = topSubscription?.amount || 0;
+      return `${userName}, your subscriptions are about ₹${total.toFixed(2)}/month. Biggest one is ${topName} at ₹${topAmount.toFixed(2)}.\nConsider cancelling or downgrading it to save more.`;
     }
 
     if (query.includes('can i afford this') || query.includes('can i afford')) {
@@ -146,13 +252,17 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
         }
         return `Based on your current balance, you cannot afford this comfortably right now. You are overspent by ₹${Math.abs(remainingBalance).toFixed(2)}.`;
       }
+      const affordability = canAfford(salary, expenses, { name: goalName, amount: goalAmount }, askedAmount);
+      const safeSavings = Math.max(0, engineSavings);
+      const monthsNow = goalAmount > 0 && safeSavings > 0 ? Math.ceil(goalAmount / safeSavings) : null;
+      const afterPurchaseSavings = Math.max(0, safeSavings - askedAmount);
+      const monthsAfter = goalAmount > 0 && afterPurchaseSavings > 0 ? Math.ceil(goalAmount / afterPurchaseSavings) : null;
+      const delay = monthsNow !== null && monthsAfter !== null ? Math.max(0, monthsAfter - monthsNow) : null;
 
-      const postPurchaseBalance = remainingBalance - askedAmount;
-      if (postPurchaseBalance >= 0) {
-        return `Based on your current balance of ₹${remainingBalance.toFixed(2)}, you can afford this comfortably. After buying ₹${askedAmount.toFixed(2)}, you will still have ₹${postPurchaseBalance.toFixed(2)}.`;
+      if (affordability.canBuy && delay !== null && delay > 0) {
+        return `You can afford this, but it may delay your goal by ${delay} month${delay > 1 ? 's' : ''}.`;
       }
-
-      return `Based on your current balance of ₹${remainingBalance.toFixed(2)}, you cannot afford this comfortably. This purchase creates a gap of ₹${Math.abs(postPurchaseBalance).toFixed(2)}.`;
+      return `${userName}, for ₹${askedAmount.toFixed(2)}: ${affordability.message}`;
     }
 
     if (query.includes('should i buy')) {
@@ -236,8 +346,20 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
 
     // INTENT: "Goal" - Goal Status & Progress
     if (query.includes('goal') || query.includes('target') || query.includes('progress')) {
-      let response = '';
+      if (goalAmount > 0) {
+        const safeSavings = remainingBalance > 0 ? remainingBalance : 0;
+        const progress = Math.min((safeSavings / goalAmount) * 100, 100);
+        const monthsToReach = safeSavings > 0 ? Math.ceil(goalAmount / safeSavings) : null;
+        const goalTitle = goalName?.trim() || 'your goal';
 
+        if (!monthsToReach) {
+          return `${userName}, for ${goalTitle}, you've saved ₹${safeSavings.toFixed(2)} of ₹${goalAmount.toFixed(2)} (${progress.toFixed(1)}%).\nTry saving ₹${(goalAmount / 12).toFixed(2)}/month to stay on track.\nYou're doing great - stay consistent!`;
+        }
+
+        return `${userName}, for ${goalTitle}, you've saved ₹${safeSavings.toFixed(2)} of ₹${goalAmount.toFixed(2)} (${progress.toFixed(1)}%).\nAt this rate, you can reach it in about ${monthsToReach} months.\nYou're doing great - stay consistent!`;
+      }
+
+      let response = '';
       if (savingsGoal === 0 && salary === 0) {
         response = `${userName}, set your monthly income and savings goal first! Then I can track your progress and celebrate your wins.`;
       } else if (savingsGoal === 0) {
@@ -245,23 +367,16 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
       } else if (salary === 0) {
         response = `${userName}, set your monthly income to see how close you are to reaching your ₹${savingsGoal} savings goal!`;
       } else {
-        const recentSpending = expenses.slice(-5).reduce((sum, exp) => sum + exp.amount, 0);
-        const canSave = salary - (totalSpending / Math.max(1, expenses.length));
-        
         response = `Your savings goal is ₹${savingsGoal.toFixed(2)}/month. `;
-
         if (remainingBalance >= savingsGoal) {
-          response += `Amazing, ${userName}! You're already saving ₹${remainingBalance.toFixed(2)}, which exceeds your goal by ₹${(remainingBalance - savingsGoal).toFixed(2)}. Keep this momentum!`;
+          response += `Amazing, ${userName}! You're already saving ₹${remainingBalance.toFixed(2)}, which exceeds your goal by ₹${(remainingBalance - savingsGoal).toFixed(2)}.`;
         } else if (remainingBalance > 0) {
           const shortfall = (savingsGoal - remainingBalance).toFixed(2);
-          response += `You're at ₹${remainingBalance.toFixed(2)} saved, just ₹${shortfall} short of your goal. `;
-          response += `Cut ₹${shortfall} from ${topCategory} and you'll reach it!`;
+          response += `You're at ₹${remainingBalance.toFixed(2)} saved, just ₹${shortfall} short of your goal.`;
         } else {
-          response += `You're currently not meeting your goal. `;
-          response += `Reduce spending by ₹${(Math.abs(remainingBalance) + savingsGoal).toFixed(2)} to hit ₹${savingsGoal.toFixed(2)} saved monthly.`;
+          response += `You're currently not meeting your goal. Reduce spending to get back on track.`;
         }
       }
-
       return response;
     }
 
@@ -336,10 +451,8 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
         response += ` You already invested ₹${investmentTotal.toFixed(2)}${topInvestment[0] ? `, with ${topInvestment[0]} leading` : ''}.`;
       }
 
-      if (goldPriceStatus === 'success' && typeof goldPrice === 'number') {
-        response += ` Current gold price is ₹${goldPrice.toFixed(2)} per unit.`;
-      } else if (goldPriceStatus === 'error') {
-        response += ' Live data unavailable, showing last known trend.';
+      if (typeof effectiveGoldPrice === 'number') {
+        response += ` Current gold price is ₹${effectiveGoldPrice.toFixed(2)} per unit.`;
       }
 
       return response;
@@ -411,62 +524,49 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
       return summary;
     }
 
-    // Default helpful response
-    return `${userName}, I can help with: "spending", "saving tips", "goal progress", "investment ideas", "balance", "advice", or "summary". What would you like to know?`;
+    if (effectiveGoldPrice !== null) {
+      if (query.includes('market') || query.includes('insight')) {
+        return `${userName}, market snapshot: Gold is ₹${Number(effectiveGoldPrice).toFixed(2)}. Reliance is up, TCS is stable.`;
+      }
+    }
+
+    return null;
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (input.trim() === '') return;
 
+    const currentInput = input;
     // Add user message
     const userMessage = {
       id: messages.length + 1,
       type: 'user',
-      text: input
+      text: currentInput
     };
 
-    // Generate bot response
-    const botResponse = {
-      id: messages.length + 2,
-      type: 'bot',
-      text: generateResponse(input)
-    };
-
-    setMessages([...messages, userMessage, botResponse]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
+
+    setIsResponding(true);
+    const ruleBased = generateRuleBasedResponse(currentInput);
+    const aiFallback = ruleBased ? null : await callOpenAIFallback(currentInput);
+    const botText = ruleBased || aiFallback || `${userName}, I can help with spending, goal progress, balance, future savings, stocks, and investments.`;
+
+    const botResponse = {
+      id: Date.now(),
+      type: 'bot',
+      text: botText
+    };
+
+    setMessages((prev) => [...prev, botResponse]);
+    setIsResponding(false);
   };
 
-  // Handle quick action buttons
-  const handleQuickAction = (action) => {
-    const actionMessages = {
-      'spending': 'What is my total spending this month?',
-      'saving': 'How can I save more money?',
-      'investment': 'What are some investment ideas for me?',
-      'afford': 'Can I afford this 2500 purchase?',
-      'buy': 'Should I buy this 3000 item?',
-      'monthlyInvestmentPlan': 'Give me an investment plan for this month.',
-      'safePlan': 'Give me a safe investment plan for this month.',
-      'balancedPlan': 'Give me a balanced investment plan for this month.',
-      'aggressivePlan': 'Give me an aggressive investment plan for this month.'
-    };
-
-    const messageText = actionMessages[action];
-    
-    // Add user message
-    const userMessage = {
-      id: messages.length + 1,
-      type: 'user',
-      text: messageText
-    };
-
-    // Generate bot response
-    const botResponse = {
-      id: messages.length + 2,
-      type: 'bot',
-      text: generateResponse(messageText)
-    };
-
-    setMessages([...messages, userMessage, botResponse]);
+  const handleLauncherSend = () => {
+    if (launcherInput.trim() === '') return;
+    setInput(launcherInput);
+    setLauncherInput('');
+    setIsChatOpen(true);
   };
 
   const handleNameChange = (e) => {
@@ -487,138 +587,126 @@ export default function ChatBot({ expenses, salary, savingsGoal, goldPrice, gold
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-white rounded-xl shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-500 to-blue-500 text-white p-4 rounded-t-xl flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold">AI Finance Assistant</h2>
-          {isEditingName ? (
-            <input
-              type="text"
-              value={userName}
-              onChange={handleNameChange}
-              onBlur={() => setIsEditingName(false)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') setIsEditingName(false);
-              }}
-              autoFocus
-              className="text-sm px-2 py-1 rounded text-indigo-600 font-semibold w-32"
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditingName(true)}
-              className="text-xs bg-indigo-400 hover:bg-indigo-300 px-2 py-1 rounded transition"
-            >
-              {userName}
-            </button>
-          )}
-        </div>
-        <p className="text-xs text-indigo-100">Hi {userName}! Get personalized financial advice</p>
+  if (!isChatOpen) {
+    return (
+      <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2">
+        <input
+          type="text"
+          value={launcherInput}
+          onChange={(e) => setLauncherInput(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') handleLauncherSend();
+          }}
+          placeholder="Ask AI Finance..."
+          className="w-52 px-3 py-2 border border-gray-300 rounded-full text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        />
+        <motion.button
+          type="button"
+          onClick={() => setIsChatOpen(true)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="w-11 h-11 rounded-full bg-indigo-500 text-white shadow-lg hover:bg-indigo-600 transition"
+          aria-label="Open chatbot"
+        >
+          🤖
+        </motion.button>
       </div>
+    );
+  }
 
-      {/* Messages Container - Fixed Height with Scroll */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-white">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                message.type === 'user'
-                  ? 'bg-indigo-500 text-white rounded-br-none'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-none'
-              }`}
-            >
-              <p className="text-sm leading-relaxed">{message.text}</p>
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ x: 80, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 80, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed right-4 top-20 w-[340px] h-[80vh] bg-white rounded-2xl shadow-lg flex flex-col z-50"
+      >
+        {/* Header */}
+        <div className="p-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-t-2xl flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold">AI Finance Assistant 🤖</h2>
+            <div className="flex items-center gap-2">
+              {isEditingName ? (
+                <input
+                  type="text"
+                  value={userName}
+                  onChange={handleNameChange}
+                  onBlur={() => setIsEditingName(false)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') setIsEditingName(false);
+                  }}
+                  autoFocus
+                  className="text-sm px-2 py-1 rounded text-indigo-600 font-semibold w-24"
+                />
+              ) : (
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="text-xs bg-indigo-400 hover:bg-indigo-300 px-2 py-1 rounded transition"
+                >
+                  {userName}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsChatOpen(false)}
+                className="text-xs bg-indigo-400 hover:bg-indigo-300 px-2 py-1 rounded transition"
+              >
+                Close
+              </button>
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input Area - Fixed at Bottom */}
-      <div className="border-t border-gray-200 p-4 bg-gray-50 rounded-b-xl flex-shrink-0 space-y-3">
-        {/* Quick Action Buttons */}
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => handleQuickAction('spending')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Check Spending
-          </button>
-          <button
-            onClick={() => handleQuickAction('saving')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Savings Advice
-          </button>
-          <button
-            onClick={() => handleQuickAction('investment')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Investment Ideas
-          </button>
-          <button
-            onClick={() => handleQuickAction('afford')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Can I Afford This?
-          </button>
-          <button
-            onClick={() => handleQuickAction('buy')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Should I Buy?
-          </button>
-          <button
-            onClick={() => handleQuickAction('monthlyInvestmentPlan')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Monthly Investment Plan
-          </button>
-          <button
-            onClick={() => handleQuickAction('safePlan')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Safe Plan
-          </button>
-          <button
-            onClick={() => handleQuickAction('balancedPlan')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Balanced Plan
-          </button>
-          <button
-            onClick={() => handleQuickAction('aggressivePlan')}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition border border-gray-200 font-medium"
-          >
-            Aggressive Plan
-          </button>
+          <p className="text-xs text-indigo-100">Hi {userName}! Ask me anything about your money.</p>
         </div>
 
-        {/* Input Box */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Ask about spending, advice, categories..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400 transition duration-200 text-sm"
-          />
-          <button
-            onClick={handleSend}
-            className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200 flex-shrink-0"
-          >
-            Send
-          </button>
+        {/* Messages */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 bg-white">
+          <AnimatePresence initial={false}>
+            {messages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    message.type === 'user'
+                      ? 'bg-indigo-500 text-white rounded-br-none'
+                      : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed">{message.text}</p>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {isResponding && <p className="text-xs text-gray-400">Thinking...</p>}
+          <div ref={messagesEndRef} />
         </div>
-        <p className="text-xs text-gray-500">
-          Try: "safe investment plan", "balanced investment plan", "aggressive investment plan", or use quick buttons above
-        </p>
-      </div>
-    </div>
+
+        {/* Input */}
+        <div className="p-2 border-t bg-white rounded-b-2xl flex-shrink-0">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask about spending, goals, or investing..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400 transition text-sm"
+            />
+            <motion.button
+              onClick={handleSend}
+              whileTap={{ scale: 0.95 }}
+              className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md transition flex-shrink-0"
+            >
+              Send
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

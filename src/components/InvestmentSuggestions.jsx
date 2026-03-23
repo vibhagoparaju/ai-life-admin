@@ -1,6 +1,41 @@
+import { useCallback, useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+
 export default function InvestmentSuggestions({ expenses, salary }) {
   const totalSpending = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const remainingBalance = salary - totalSpending;
+  const [goldPrice, setGoldPrice] = useState(null);
+  const [marketStatus, setMarketStatus] = useState('loading');
+  const [updatedAt, setUpdatedAt] = useState(null);
+
+  const stocks = [
+    { name: 'Reliance', trend: 'up' },
+    { name: 'TCS', trend: 'stable' }
+  ];
+
+  const fetchGoldPrice = useCallback(async () => {
+    setMarketStatus('loading');
+    try {
+      const response = await fetch('https://api.metals.live/v1/spot/gold');
+      if (!response.ok) throw new Error('Market data unavailable');
+      const data = await response.json();
+      const parsed = Array.isArray(data) ? data[0]?.price || data[0]?.gold || data[0] : null;
+
+      if (typeof parsed === 'number') {
+        setGoldPrice(parsed);
+        setMarketStatus('success');
+        setUpdatedAt(new Date().toISOString());
+      } else {
+        throw new Error('Gold data unavailable');
+      }
+    } catch (error) {
+      setMarketStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGoldPrice();
+  }, [fetchGoldPrice]);
 
   // Sample investment data
   const investments = {
@@ -8,7 +43,7 @@ export default function InvestmentSuggestions({ expenses, salary }) {
       name: 'Gold Investment',
       icon: '🏆',
       description: 'Physical or digital gold - safe and traditional',
-      currentPrice: 7400, // per gram
+      currentPrice: goldPrice || 7400,
       minInvestment: 1000,
       monthlyReturn: '0.5% - 1%',
       riskLevel: 'Low',
@@ -133,8 +168,45 @@ export default function InvestmentSuggestions({ expenses, salary }) {
 
   return (
     <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-6 p-4 bg-yellow-50 rounded-2xl border border-yellow-200 shadow-md transition hover:shadow-lg"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-yellow-800 font-semibold text-sm">Live Market Insights</p>
+            <p className="text-yellow-700 text-sm mt-1">
+              {marketStatus === 'loading'
+                ? 'Fetching market data...'
+                : marketStatus === 'error'
+                  ? 'Live market data unavailable right now.'
+                  : `Current gold price: ₹${goldPrice.toFixed(2)}`}
+            </p>
+            <p className="text-yellow-700 text-xs mt-1">
+              {updatedAt ? `Last updated just now (${new Date(updatedAt).toLocaleTimeString()})` : 'Last updated: —'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={fetchGoldPrice}
+            disabled={marketStatus === 'loading'}
+            className="text-xs font-medium px-2 py-1 rounded border border-yellow-300 text-yellow-700 hover:bg-yellow-100 disabled:opacity-60"
+          >
+            Refresh
+          </button>
+        </div>
+        <p className="text-yellow-700 text-sm mt-3">
+          {stocks[0].name} is trending {stocks[0].trend}, {stocks[1].name} is {stocks[1].trend}.
+        </p>
+      </motion.div>
+
       {/* Investment Advice */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-200 shadow-md transition hover:shadow-lg"
+      >
         <p className="text-purple-700 font-semibold text-sm mb-2">💼 Investment Strategy</p>
         <p className="text-purple-600 text-sm">{getInvestmentAdvice()}</p>
         {remainingBalance > 0 && (
@@ -142,7 +214,7 @@ export default function InvestmentSuggestions({ expenses, salary }) {
             📌 You can invest up to <span className="font-bold">₹{remainingBalance.toFixed(2)}/month</span>
           </p>
         )}
-      </div>
+      </motion.div>
 
       {/* Recommended Allocation */}
       {recommendations.length > 0 && (

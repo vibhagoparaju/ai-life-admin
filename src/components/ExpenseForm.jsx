@@ -1,9 +1,18 @@
 import { useState } from 'react';
 
-export default function ExpenseForm({ onAddExpense, onSetGoal, onSetSalary, onSimulate }) {
+export default function ExpenseForm({
+  onAddExpense,
+  onSetGoal,
+  onSetGoalName,
+  onSetGoalAmount,
+  onSetSalary,
+  onSimulate
+}) {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [goal, setGoal] = useState('');
+  const [goalName, setGoalName] = useState('');
+  const [goalAmount, setGoalAmount] = useState('');
   const [salary, setSalary] = useState('');
 
   const handleSubmit = (e) => {
@@ -29,6 +38,18 @@ export default function ExpenseForm({ onAddExpense, onSetGoal, onSetSalary, onSi
     const salaryValue = e.target.value;
     setSalary(salaryValue);
     onSetSalary(salaryValue);
+  };
+
+  const handleGoalNameChange = (e) => {
+    const value = e.target.value;
+    setGoalName(value);
+    onSetGoalName(value);
+  };
+
+  const handleGoalAmountChange = (e) => {
+    const value = e.target.value;
+    setGoalAmount(value);
+    onSetGoalAmount(value);
   };
 
   return (
@@ -62,6 +83,33 @@ export default function ExpenseForm({ onAddExpense, onSetGoal, onSetSalary, onSi
             onChange={handleGoalChange}
             placeholder="e.g., 5000"
             className="w-full px-3 py-2 border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400 transition duration-200 bg-indigo-50"
+          />
+        </div>
+
+        <hr className="border-gray-200" />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-2">Goal Name</label>
+          <input
+            id="goalName"
+            type="text"
+            value={goalName}
+            onChange={handleGoalNameChange}
+            placeholder="e.g., 🚗 Car Fund"
+            className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200 bg-green-50"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-2">Goal Amount (₹)</label>
+          <input
+            id="goalAmount"
+            type="number"
+            step="0.01"
+            value={goalAmount}
+            onChange={handleGoalAmountChange}
+            placeholder="e.g., 200000"
+            className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200 bg-green-50"
           />
         </div>
 

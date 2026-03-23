@@ -4,19 +4,27 @@ export default function DailyBriefing({ expenses, salary, savingsGoal }) {
   const [userName, setUserName] = useState('User');
   const [editingName, setEditingName] = useState(false);
 
-  // Get current time-based greeting
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const generateSmartMessage = () => {
+    const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const savings = salary - totalSpending;
+    const spendingRatio = salary > 0 ? (totalSpending / salary) * 100 : 0;
 
-  const getTimeEmoji = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return '🌅';
-    if (hour < 18) return '☀️';
-    return '🌙';
+    if (salary > 0 && spendingRatio > 70) {
+      return `You're spending a lot this month, ${userName}.`;
+    }
+
+    if (goal > 0 && savings > 0) {
+      const goalProgress = (savings / goal) * 100;
+      if (goalProgress >= 80) {
+        return `You're close to your goal, ${userName}. Stay consistent.`;
+      }
+    }
+
+    if (savings > 0) {
+      return `You're on track this month, ${userName}.`;
+    }
+
+    return `${userName}, start small today and you'll build momentum.`;
   };
 
   // Calculate yesterday's spending (last ~25% of expenses)
@@ -116,15 +124,14 @@ export default function DailyBriefing({ expenses, salary, savingsGoal }) {
   const yesterdaySpending = getYesterdaySpending();
   const topCategory = getTopCategory();
   const progress = getSavingsProgress();
+  const goal = savingsGoal;
 
   return (
     <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl p-6 text-white shadow-lg mb-8">
-      {/* Greeting Section */}
+      {/* Smart Status Line */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-2xl font-bold">
-            {getGreeting()} {getTimeEmoji}
-          </h2>
+          <h2 className="text-2xl font-bold">{generateSmartMessage()}</h2>
           {!editingName ? (
             <p 
               className="text-indigo-100 cursor-pointer hover:text-white transition"
